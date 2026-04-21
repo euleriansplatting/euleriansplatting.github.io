@@ -1,6 +1,7 @@
 const mainImage = document.getElementById('main-image');
 const redBox = document.getElementById('red-box');
 const zoomDisplays = document.querySelectorAll('.zoom-display');
+const teaserContainer = document.querySelector('.teaser-container');
 const baseBoxSize = 40;
 const borderWidth = 2;
 
@@ -164,6 +165,10 @@ mainImage.addEventListener('mousemove', (e) => {
 });
 
 mainImage.addEventListener('mouseleave', () => {
+  resetRedBoxToDefault();
+});
+
+teaserContainer.addEventListener('pointerleave', () => {
   resetRedBoxToDefault();
 });
 

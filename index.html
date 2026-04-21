@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Eulerian Gaussian Splatting | CVPR 2026</title>
 
+  <link rel="icon" type="image/png" href="assets/images/icon.png">
   <link rel="stylesheet" href="css/style.css">
   <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
@@ -23,7 +24,7 @@
       <a href="https://dorverbin.github.io">Dor Verbin</a><sup>2</sup>
     </p>
     <p class="affiliations">
-      <sup>1</sup>Harvard University, <sup>2</sup>Google Deepmind, <sup>3</sup>Google
+      <sup>1</sup>Harvard University, <sup>2</sup>Google DeepMind, <sup>3</sup>Google
     </p>
     <div class="links">
       <a href="#" class="link-btn">Paper (PDF)</a>
@@ -45,12 +46,12 @@
       <div class="grid-cell right-cell">
         <div class="zoom-grid">
           <div class="zoom-cell">
-            <div class="zoom-display" id="zoom-gt" data-image="00003.png"></div>
-            <label>Ground Truth</label>
-          </div>
-          <div class="zoom-cell">
             <div class="zoom-display" id="zoom-ours" data-image="00003-ours.png"></div>
             <label>Ours (EGS)</label>
+          </div>
+          <div class="zoom-cell">
+            <div class="zoom-display" id="zoom-gt" data-image="00003.png"></div>
+            <label>Ground Truth</label>
           </div>
           <div class="zoom-cell">
             <div class="zoom-display" id="zoom-mcmc" data-image="00003-mcmc.png"></div>
@@ -83,16 +84,28 @@
     <img src="assets/images/pyramid_1d_v4.png" alt="Hashed probability pyramid with 3 levels showing sampling and hashing blocks">
   </div>
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    We parameterize the probability distribution \(p_\theta(\mu)\) over 3D space as a product of functions over \(L\) levels: \(p_\theta(\mu) = \frac{1}{Z} \prod_{\ell=0}^{L-1} f^{(\ell)}_\theta(\mu)\), where each level is a piecewise-constant function with \(N_\ell \times N_\ell \times N_\ell\) bins partitioning the volume. This pyramid representation is memory-efficient and extends piecewise-constant distributions to 3D without cubic growth in parameters. To further reduce memory, we allocate at most \(B\) distinct \(2 \times 2 \times 2\) blocks per level and randomly tile them using a hash function, greatly reducing the parameter count while maintaining representational capacity. Hash collisions (where multiple bins map to the same block) introduce parameter sharing, but their sparsity across levels makes joint collisions vanishingly unlikely. The figure shows a one-dimensional example with \(L=3\) levels and budget \(B=3\): levels 1 and 2 are normalized within each 2-bin block, and level 2 is hashed so blocks 1–3 are identical to blocks 4–6, effectively mimicking a 12-bin distribution using only eight degrees of freedom.
+    We introduce a novel 3D probability distribution function that enables efficient sampling and high-resolution representations without a prohibitive increase in parameter count. We do this with a pyramid-based representation in which each level is a piecewise-constant function with \(N_\ell \times N_\ell \times N_\ell\) bins partitioning the volume, and the full distribution is given by
+    \[
+    p_\theta(\mu) = \frac{1}{Z} \prod_{\ell=0}^{L-1} f^{(\ell)}_\theta(\mu).
+    \]
+    This pyramid representation is memory-efficient and extends piecewise-constant distributions to 3D without cubic growth in parameters. To further reduce memory, we allocate at most \(B\) distinct \(2 \times 2 \times 2\) blocks per level and randomly tile them using a hash function, greatly reducing the parameter count while maintaining representational capacity. Hash collisions (where multiple bins map to the same block) introduce parameter sharing, but their sparsity across levels makes joint collisions vanishingly unlikely. The figure shows a one-dimensional example with \(L=3\) levels and budget \(B=3\): levels 1 and 2 are normalized within each 2-bin block, and level 2 is hashed so blocks 1–3 are identical to blocks 4–6, effectively mimicking a 12-bin distribution using only eight degrees of freedom.
   </p>
   <div style="clear: both;"></div>
 
   <h3 style="margin-top: 40px; margin-bottom: 15px; font-size: 1.3rem;">Optimization</h3>
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    Our optimization task minimizes the error between observed images \(\{I^{\text{GT}}_k\}_{k=0}^{K-1}\) and rendered images \(\{I_k\}_{k=0}^{K-1}\) by adjusting distribution parameters \(\theta\) and Gaussian attributes \(\phi\). The loss is a combination of \(L_1\) and D-SSIM losses, following 3DGS, with regularization on opacities, scales, and spherical harmonic coefficients. At every iteration, we sample a single set of \(M\) Gaussians from the hashed probability pyramid and estimate expected values using Monte Carlo sampling.
+    We optimize the distribution parameters \(\theta\) and Gaussian attributes \(\phi\) by minimizing the expected reconstruction loss over sampled Gaussians:
+    \[
+    \min_{\theta,\phi} \; \mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[\mathcal{L}\!\left(I(\mu_0,\ldots,\mu_{M-1};\phi), I_k^{\mathrm{GT}}\right)\right].
+    \]
+    The loss combines \(L_1\) and D-SSIM terms, following 3DGS, together with regularization on opacities, scales, and spherical harmonic coefficients. At every iteration, we sample a single set of \(M\) Gaussians from the hashed probability pyramid and estimate the objective using Monte Carlo sampling.
   </p>
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    Computing gradients with respect to \(\theta\) requires special care since \(\theta\) affects the distribution used for the expectation. While the pathwise (automatic differentiation) estimator is unbiased, it suffers from high variance and slow convergence. Instead, we propose a novel unbiased gradient estimator based on the score function method with control variates: \(\nabla_\theta I = \mathbb{E}_{\mu\sim p_\theta(\mu)}\left[\sum_{i=0}^{M-1}(I-I_{-i})\cdot\nabla_\theta\log p_\theta(\mu_i)\right]\), where \(I_{-i}\) is the image rendered without the \(i\)-th Gaussian. This formulation greatly reduces variance by weighting each gradient contribution by its individual impact on the image. Remarkably, the differences \((I-I_{-i})\) can be computed efficiently during automatic differentiation for \(\phi\) gradients, providing similar computational efficiency as pathwise gradients but with much lower variance.
+    Computing gradients with respect to \(\theta\) requires special care because \(\theta\) determines the sampling distribution inside the expectation. We therefore use a novel unbiased score-function estimator with control variates:
+    \[
+    \nabla_\theta I = \mathbb{E}_{\mu\sim p_\theta(\mu)}\left[\sum_{i=0}^{M-1}(I-I_{-i})\cdot\nabla_\theta\log p_\theta(\mu_i)\right],
+    \]
+    where \(I_{-i}\) is the image rendered without the \(i\)-th Gaussian. This formulation greatly reduces variance by weighting each gradient contribution by its individual impact on the image. Remarkably, the differences \((I-I_{-i})\) can be computed efficiently during automatic differentiation for \(\phi\) gradients, providing similar computational efficiency to standard automatic differentiation while achieving much lower variance.
   </p>
 
   <h2 class="section-title">Video Results</h2>
@@ -119,7 +132,7 @@
 
   <h2 class="section-title">BibTeX</h2>
   <pre><code>@inproceedings{polansky2026eulerian,
-    title={Eulerian Splatting with Hashed Probability Pyramids},
+    title={Eulerian Splatting using Hashed Probability Pyramids},
     author={Polansky, Mia Gaia and Kopanas, George and Garbin, Stephan and Zickler, Todd and Verbin, Dor},
     booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
     year={2026}}

@@ -52,7 +52,7 @@ body {
 
 /* Links Section */
 .links {
-  margin-bottom: 40px;
+  margin-bottom: 18px;
 }
 
 .link-btn {
@@ -126,6 +126,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 .teaser-caption {
@@ -151,6 +152,7 @@ body {
   cursor: pointer;
   border-radius: 5px;
   margin: 0 10px;
+  flex: 0 0 auto;
 }
 
 .teaser-container button:hover {
@@ -164,9 +166,13 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.left-cell {
+  align-self: start;
+}
+
 .left-cell img {
   width: 100%;
-  height: 100%;
+  height: auto;
   display: block;
 }
 
@@ -213,6 +219,7 @@ body {
   position: absolute;
   width: 40px;
   height: 40px;
+  box-sizing: border-box;
   border: 2px solid red;
   pointer-events: none;
   display: none;
@@ -275,6 +282,26 @@ footer a:hover {
 @media (max-width: 768px) {
   .video-grid {
     grid-template-columns: 1fr;
+  }
+
+  .teaser-grid {
+    grid-template-columns: 1fr;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .right-cell {
+    padding: 5px;
+  }
+
+  .zoom-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: none;
+    height: auto;
+  }
+
+  .zoom-cell {
+    aspect-ratio: 1 / 1;
   }
 
   .paper-title {

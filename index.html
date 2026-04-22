@@ -78,7 +78,11 @@
   <h2 class="section-title">Methodology</h2>
   <img src="assets/images/overview_v1.png" alt="Overview visualization showing the hierarchical probability density function and hash grids pipeline" class="teaser-img">
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    We represent the scene as a hierarchical probability density function \(p_\theta(\mu)\), along with hash grids \(\phi\) that store Gaussian attributes (color, opacity, scale, rotation) at each position. At each training iteration, we sample Gaussian centers \(\mu_i\sim p_\theta(\mu)\), look up their attributes \(\phi(\mu_i)\), and render the resulting Gaussians with a training camera \(\pi_k\) to create image \(I\) (black arrows). The gradient of the loss between rendered image \(I\) and the corresponding training image is used to update parameters \(\theta\) and \(\phi\) (gray arrows).
+    We represent the scene as a hierarchical probability density function \(p_\theta(\mu)\), along with hash grids \(\phi\) that store Gaussian attributes (color, opacity, scale, rotation) at each position. At each training iteration, we sample Gaussian centers \(\mu_i\sim p_\theta(\mu)\), look up their attributes \(\phi(\mu_i)\), and render the resulting Gaussians with a training camera \(\pi_k\). The expected rendered image is given by
+    \[
+    I_k = \mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[\mathrm{Render}\!\left(\pi_k,\{(\mu_i,\phi(\mu_i))\}_{i=0}^{M-1}\right)\right].
+    \]
+    This makes the optimization problem intuitive: the distribution \(p_\theta(\mu)\) determines where Gaussians are placed, while \(\phi\) determines what is rendered at those locations. We then update \(\theta\) and \(\phi\) so that the expected rendered image matches the corresponding training image, where the gray arrows indicate the resulting gradient flow.
   </p>
 
   <h3 style="margin-top: 40px; margin-bottom: 15px; font-size: 1.3rem;">Hashed Probability Pyramid</h3>
@@ -96,16 +100,18 @@
 
   <h3 style="margin-top: 40px; margin-bottom: 15px; font-size: 1.3rem;">Optimization</h3>
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    We optimize the distribution parameters \(\theta\) and Gaussian attributes \(\phi\) by minimizing the expected reconstruction loss over sampled Gaussians:
+    We optimize the distribution parameters \(\theta\) and Gaussian attributes \(\phi\) by minimizing the reconstruction loss of the expected rendered image:
     \[
-    \min_{\theta,\phi} \; \mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[\mathcal{L}\!\left(I(\mu_0,\ldots,\mu_{M-1};\phi), I_k^{\mathrm{GT}}\right)\right].
+    \min_{\theta,\phi} \; \mathcal{L}\!\left(\mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[I_k(\mu_0,\ldots,\mu_{M-1};\phi)\right], I_k^{\mathrm{GT}}\right).
     \]
     The loss combines \(L_1\) and D-SSIM terms, following 3DGS, together with regularization on opacities, scales, and spherical harmonic coefficients. At every iteration, we sample a single set of \(M\) Gaussians from the hashed probability pyramid and estimate the objective using Monte Carlo sampling.
   </p>
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
     Computing gradients with respect to \(\theta\) requires special care because \(\theta\) determines the sampling distribution inside the expectation. We therefore use a novel unbiased score-function estimator with control variates:
     \[
-    \nabla_\theta I = \mathbb{E}_{\mu\sim p_\theta(\mu)}\left[\sum_{i=0}^{M-1}(I-I_{-i})\cdot\nabla_\theta\log p_\theta(\mu_i)\right],
+    \nabla_\theta \, \mathbb{E}_{\mu\sim p_\theta(\mu)}[I]
+    =
+    \mathbb{E}_{\mu\sim p_\theta(\mu)}\left[\sum_{i=0}^{M-1}(I-I_{-i})\cdot\nabla_\theta\log p_\theta(\mu_i)\right],
     \]
     where \(I_{-i}\) is the image rendered without the \(i\)-th Gaussian. This formulation greatly reduces variance by weighting each gradient contribution by its individual impact on the image. Remarkably, the differences \((I-I_{-i})\) can be computed efficiently during automatic differentiation for \(\phi\) gradients, providing similar computational efficiency to standard automatic differentiation while achieving much lower variance.
   </p>

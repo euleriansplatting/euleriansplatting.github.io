@@ -102,7 +102,7 @@
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
     We optimize the distribution parameters \(\theta\) and Gaussian attributes \(\phi\) by minimizing the reconstruction loss of the expected rendered image:
     \[
-    \min_{\theta,\phi} \; \mathcal{L}\!\left(\mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[I_k(\mu_0,\ldots,\mu_{M-1};\phi)\right], I_k^{\mathrm{GT}}\right).
+    \min_{\theta,\phi} \; \mathcal{L}\!\left(\mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[I(\mu_0,\ldots,\mu_{M-1};\phi)\right], I^{\mathrm{GT}}\right).
     \]
     The loss combines \(L_1\) and D-SSIM terms, following 3DGS, together with regularization on opacities, scales, and spherical harmonic coefficients. At every iteration, we sample a single set of \(M\) Gaussians from the hashed probability pyramid and estimate the objective using Monte Carlo sampling.
   </p>

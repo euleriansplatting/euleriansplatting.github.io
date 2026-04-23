@@ -71,13 +71,15 @@
   <p class="teaser-caption"><em><span class="teaser-caption-title">Eulerian Gaussian Splatting</span> uses gradient descent to optimize a gridded 3D probability distribution, then samples it to generate Gaussian splats.</em></p>
 
   <h2 class="section-title">Abstract</h2>
-  <p>
+  <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
   We introduce a probabilistic splat-based radiance field framework that retains the fast rasterization and test-time efficiency of 3D Gaussian Splatting (3DGS) while replacing heuristic primitive manipulation with gradient-based optimization of a volumetric probability density. Rather than relocating, splitting, or culling Gaussians via hand-tuned densification (e.g., ADC), we treat primitive locations as samples drawn from a persistent, learnable density. We instantiate this density with a novel, memory-efficient multi-scale hierarchical grid that enables end-to-end gradient-based control over primitive population density. To stabilize stochastic training, we derive an unbiased gradient estimator with control variates that markedly reduces variance. By allowing probability mass to flow to where the loss demands, our method eliminates brittle priors and naturally explores the volume, achieving state-of-the-art reconstruction quality on mip-NeRF 360 while preserving 3DGS-level rendering speed.
   </p>
 
   <h2 class="section-title">Methodology</h2>
-  <img src="assets/images/overview_v1.png" alt="Overview visualization showing the hierarchical probability density function and hash grids pipeline" class="teaser-img">
-  <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
+  <div class="figure-scroll">
+    <img src="assets/images/overview_v1.png" alt="Overview visualization showing the hierarchical probability density function and hash grids pipeline" class="teaser-img methodology-figure">
+  </div>
+  <p style="font-size: 0.95rem; color: #555; margin: 6px 0 20px;">
     We represent the scene as a hierarchical probability density function \(p_\theta(\mu)\), along with hash grids \(\phi\) that store Gaussian attributes (color, opacity, scale, rotation) at each position. At each training iteration, we sample Gaussian centers \(\mu_i\sim p_\theta(\mu)\), look up their attributes \(\phi(\mu_i)\), and render the resulting Gaussians with a training camera \(\pi_k\). The expected rendered image is given by
     \[
     I_k = \mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[\mathrm{Render}\!\left(\pi_k,\{(\mu_i,\phi(\mu_i))\}_{i=0}^{M-1}\right)\right].

@@ -68,7 +68,7 @@
     </div>
     <button id="next-folder">&rarr;</button>
   </div>
-  <p class="teaser-caption"><em><span class="teaser-caption-title">Eulerian Gaussian Splatting</span> uses a learned probability density to robustly estimate Gaussian positions while retaining the fast rendering speeds of 3D Gaussian Splatting.</em></p>
+  <p class="teaser-caption"><em><span class="teaser-caption-title">Eulerian Gaussian Splatting</span> uses gradient descent to optimize a gridded 3D probability distribution, then samples it to generate Gaussian splats.</em></p>
 
   <h2 class="section-title">Abstract</h2>
   <p>
@@ -82,7 +82,7 @@
     \[
     I_k = \mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[\mathrm{Render}\!\left(\pi_k,\{(\mu_i,\phi(\mu_i))\}_{i=0}^{M-1}\right)\right].
     \]
-    This makes the optimization problem intuitive: the distribution \(p_\theta(\mu)\) determines where Gaussians are placed, while \(\phi\) determines what is rendered at those locations. We then update \(\theta\) and \(\phi\) so that the expected rendered image matches the corresponding training image, where the gray arrows indicate the resulting gradient flow.
+    and we update \(\theta\) and \(\phi\) so that the expected rendered image matches the corresponding training image. The gray arrows indicate the resulting gradient flow.
   </p>
 
   <h3 style="margin-top: 40px; margin-bottom: 15px; font-size: 1.3rem;">Hashed Probability Pyramid</h3>
@@ -90,30 +90,23 @@
     <img src="assets/images/pyramid_1d_v4.png" alt="Hashed probability pyramid with 3 levels showing sampling and hashing blocks">
   </div>
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    We introduce a novel 3D probability distribution function that enables efficient sampling and high-resolution representations without a prohibitive increase in parameter count. We do this with a pyramid-based representation in which each level is a piecewise-constant function with \(N_\ell \times N_\ell \times N_\ell\) bins partitioning the volume, and the full distribution is given by
+    We create a volumetric piecewise-constant PDF without cubic growth in parameters by defining a hashed pyramid. Each level is a piecewise-constant function over the volume, and the full distribution is given by
     \[
     p_\theta(\mu) = \frac{1}{Z} \prod_{\ell=0}^{L-1} f^{(\ell)}_\theta(\mu).
     \]
-    This pyramid representation is memory-efficient and extends piecewise-constant distributions to 3D without cubic growth in parameters. To further reduce memory, we allocate at most \(B\) distinct \(2 \times 2 \times 2\) blocks per level and randomly tile them using a hash function, greatly reducing the parameter count while maintaining representational capacity. Hash collisions (where multiple bins map to the same block) introduce parameter sharing, but their sparsity across levels makes joint collisions vanishingly unlikely. The figure shows a one-dimensional example with \(L=3\) levels and budget \(B=3\): levels 1 and 2 are normalized within each 2-bin block, and level 2 is hashed so blocks 1–3 are identical to blocks 4–6, effectively mimicking a 12-bin distribution using only eight degrees of freedom.
+    Each bin at level \(\ell\) is subdivided into a normalized \(2 \times 2 \times 2\) PDF at level \(\ell+1\). At deeper levels, parameters are shared between subdivisions. In the one-dimensional example above, blocks 1-3 and blocks 4-6 at level \(\ell=2\) are identical, so the pyramid represents a sparse 12-bin piecewise-constant PDF using only 8 instead of the usual 11 parameters. In three dimensions, this reduces storage by 70% and allows training on a single GPU.
   </p>
   <div style="clear: both;"></div>
 
   <h3 style="margin-top: 40px; margin-bottom: 15px; font-size: 1.3rem;">Optimization</h3>
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    We optimize the distribution parameters \(\theta\) and Gaussian attributes \(\phi\) by minimizing the reconstruction loss of the expected rendered image:
-    \[
-    \min_{\theta,\phi} \; \mathcal{L}\!\left(\mathbb{E}_{\mu_0,\ldots,\mu_{M-1}\sim p_\theta(\mu)}\left[I(\mu_0,\ldots,\mu_{M-1};\phi)\right], I^{\mathrm{GT}}\right).
-    \]
-    The loss combines \(L_1\) and D-SSIM terms, following 3DGS, together with regularization on opacities, scales, and spherical harmonic coefficients. At every iteration, we sample a single set of \(M\) Gaussians from the hashed probability pyramid and estimate the objective using Monte Carlo sampling.
-  </p>
-  <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
-    Computing gradients with respect to \(\theta\) requires special care because \(\theta\) determines the sampling distribution inside the expectation. We therefore use a novel unbiased score-function estimator with control variates:
+    We stabilize training by designing a low-variance unbiased estimator for the gradient with respect to pyramid parameters \(\theta\):
     \[
     \nabla_\theta \, \mathbb{E}_{\mu\sim p_\theta(\mu)}[I]
     =
     \mathbb{E}_{\mu\sim p_\theta(\mu)}\left[\sum_{i=0}^{M-1}(I-I_{-i})\cdot\nabla_\theta\log p_\theta(\mu_i)\right],
     \]
-    where \(I_{-i}\) is the image rendered without the \(i\)-th Gaussian. This formulation greatly reduces variance by weighting each gradient contribution by its individual impact on the image. Remarkably, the differences \((I-I_{-i})\) can be computed efficiently during automatic differentiation for \(\phi\) gradients, providing similar computational efficiency to standard automatic differentiation while achieving much lower variance.
+    This control variate estimator isolates the contribution of each Gaussian splat \(i\) based on the difference \((I-I_{-i})\) between the image rendered with all Gaussians and the image rendered with all but the \(i\)-th one. Surprisingly, these differences arise within the autodiff of attribute parameters \(\phi\), so they are computed without additional rendering passes.
   </p>
 
   <h2 class="section-title">Video Results</h2>

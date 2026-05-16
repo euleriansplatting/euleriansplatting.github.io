@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hashed Probability Pyramid Viewer</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #ffffff;
+      color: #222;
+      font-family: "DM Mono", "Courier New", monospace;
+      overflow: hidden;
+    }
+    #wrap {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 520px auto auto;
+      user-select: none;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 14px 20px 0;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #111;
+    }
+    #canvaswrap {
+      position: relative;
+      cursor: grab;
+      min-height: 0;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: #777;
+      letter-spacing: 0.1em;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #controls {
+      position: relative;
+      padding: 12px 20px 24px;
+      border-top: 1px solid #e4e4e4;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    #frameLabel {
+      font-size: 14px;
+      color: #111;
+      width: 100%;
+    }
+    #sliderWrap {
+      position: relative;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    #ticks {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+    }
+    #ticks div {
+      width: 1px;
+      height: 5px;
+      background: #e0e0e0;
+    }
+    #tickLabels {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -10px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      font-size: 12px;
+      color: #111;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+    #tickLabels sup {
+      font-size: 0.75em;
+      line-height: 0;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 3px;
+      appearance: none;
+      background: #e4e4e4;
+      border-radius: 0;
+      outline: none;
+      cursor: pointer;
+      position: relative;
+      z-index: 1;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #555;
+      cursor: pointer;
+      transition: transform .1s;
+    }
+    input[type="range"]:hover::-webkit-slider-thumb {
+      transform: scale(1.35);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #555;
+      border: none;
+    }
+    #readout {
+      padding: 0 20px 14px;
+      display: none;
+      gap: 18px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: #777;
+    }
+    body.show-debug #readout {
+      display: flex;
+    }
+    code {
+      color: #222;
+    }
+    #status {
+      position: absolute;
+      top: 12px;
+      right: 20px;
+      color: #111;
+      font-size: 12px;
+      min-width: 120px;
+      text-align: right;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <header>
+      <span></span>
+      <span id="meta">100,000 Gaussians</span>
+    </header>
+
+    <div id="canvaswrap">
+      <canvas id="gl"></canvas>
+      <div id="hint">drag to rotate · scroll to zoom · shift+drag to pan</div>
+    </div>
+
+    <div id="controls">
+      <div id="frameLabel">Hashed Probability Pyramid Resolution</div>
+      <div id="sliderWrap">
+        <div id="ticks"></div>
+        <div id="tickLabels"></div>
+        <input type="range" id="slider" min="0" max="11" step="1" value="11">
+      </div>
+      <div id="status">loading</div>
+    </div>
+
+    <div id="readout">
+      <span>zoom <code id="zoom">-</code></span>
+      <span>view <code id="view">-</code></span>
+      <span>quat <code id="quat">-</code></span>
+      <span>pan <code id="pan">-</code></span>
+    </div>
+  </div>
+
+  <script>
+  (async function() {
+    const DATA_URL = "points.bin";
+    const N = 100000;
+    const NUM_FRAMES = 12;
+    const DIMS = 3;
+    const SCENE_RADIUS = 6.0;
+    const INITIAL_ZOOM = 85.0;
+    const MIN_ZOOM = 10.0;
+    const MAX_ZOOM = 240.0;
+    const BASE_POINT_SIZE = Math.max(1.8, Math.min(4.5, 470 / Math.sqrt(N)));
+    const INITIAL_QUAT = [-0.7486, 0.0446, -0.0598, -0.6589];
+    const INITIAL_PAN = [-0.0007, 0.0462];
+
+    const status = document.getElementById("status");
+    const tickWrap = document.getElementById("ticks");
+    const tickLabelWrap = document.getElementById("tickLabels");
+    for (let i = 0; i < NUM_FRAMES; i++) {
+      tickWrap.appendChild(document.createElement("div"));
+      const label = document.createElement("span");
+      label.innerHTML = `${2 ** (i + 1)}<sup>3</sup>`;
+      tickLabelWrap.appendChild(label);
+    }
+
+    const canvas = document.getElementById("gl");
+    const gl = canvas.getContext("webgl2", { antialias: true, alpha: false });
+    if (!gl) {
+      status.textContent = "WebGL2 unavailable";
+      return;
+    }
+
+    status.textContent = "fetching";
+    const response = await fetch(DATA_URL);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${DATA_URL}: ${response.status}`);
+    }
+    const buffer = await response.arrayBuffer();
+    const expectedBytes = N * NUM_FRAMES * DIMS * Float32Array.BYTES_PER_ELEMENT;
+    if (buffer.byteLength !== expectedBytes) {
+      throw new Error(`Expected ${expectedBytes} bytes, got ${buffer.byteLength}`);
+    }
+    const flatData = new Float32Array(buffer);
+    status.textContent = `${(buffer.byteLength / 1048576).toFixed(1)} MB`;
+
+    const sceneRadius = SCENE_RADIUS;
+    status.textContent = "";
+
+    const VS = `#version 300 es
+    precision highp float;
+    uniform mat4 u_mvp;
+    uniform float u_pointSize;
+    in vec3 a_position;
+    out float v_depth;
+    void main() {
+      vec4 clip = u_mvp * vec4(a_position, 1.0);
+      gl_Position = clip;
+      gl_PointSize = u_pointSize;
+      v_depth = clamp((clip.z / clip.w + 1.0) * 0.5, 0.0, 1.0);
+    }`;
+
+    const FS = `#version 300 es
+    precision mediump float;
+    in float v_depth;
+    out vec4 fragColor;
+    uniform vec3 u_color;
+    uniform float u_alpha;
+    void main() {
+      vec2 c = gl_PointCoord - 0.5;
+      float r = dot(c, c);
+      if (r > 0.25) discard;
+      float edge = 1.0 - smoothstep(0.18, 0.25, r);
+      float dim = 0.82 + 0.18 * v_depth;
+      fragColor = vec4(u_color * dim, u_alpha * edge);
+    }`;
+
+    function makeShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(gl.getShaderInfoLog(shader));
+      }
+      return shader;
+    }
+
+    const program = gl.createProgram();
+    gl.attachShader(program, makeShader(gl.VERTEX_SHADER, VS));
+    gl.attachShader(program, makeShader(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program));
+    }
+    gl.useProgram(program);
+
+    const loc = {
+      mvp: gl.getUniformLocation(program, "u_mvp"),
+      pointSize: gl.getUniformLocation(program, "u_pointSize"),
+      color: gl.getUniformLocation(program, "u_color"),
+      alpha: gl.getUniformLocation(program, "u_alpha"),
+      position: gl.getAttribLocation(program, "a_position"),
+    };
+
+    const vao = gl.createVertexArray();
+    const vbo = gl.createBuffer();
+
+    function uploadFrame(frame) {
+      const start = frame * N * DIMS;
+      const slice = flatData.subarray(start, start + N * DIMS);
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, slice, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(loc.position);
+      gl.vertexAttribPointer(loc.position, 3, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+    }
+
+    function qId() { return [0, 0, 0, 1]; }
+    function qNorm(q) {
+      const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+      return [q[0] / n, q[1] / n, q[2] / n, q[3] / n];
+    }
+    function qConj(q) { return [-q[0], -q[1], -q[2], q[3]]; }
+    function qMul(a, b) {
+      const [ax, ay, az, aw] = a;
+      const [bx, by, bz, bw] = b;
+      return [
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+      ];
+    }
+    function qAA(ax, ay, az, angle) {
+      const s = Math.sin(angle / 2);
+      return [ax * s, ay * s, az * s, Math.cos(angle / 2)];
+    }
+    function qRotVec(q, v) {
+      const p = [v[0], v[1], v[2], 0];
+      const r = qMul(qMul(q, p), qConj(q));
+      return [r[0], r[1], r[2]];
+    }
+    function qMat4(q) {
+      const [x, y, z, w] = q;
+      return [
+        1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y), 0,
+        2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x), 0,
+        2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y), 0,
+        0, 0, 0, 1,
+      ];
+    }
+    function m4mul(a, b) {
+      const out = new Array(16).fill(0);
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          for (let k = 0; k < 4; k++) out[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k];
+        }
+      }
+      return out;
+    }
+    function m4persp(fov, aspect, near, far) {
+      const t = 1 / Math.tan(fov / 2);
+      const nf = 1 / (near - far);
+      return [t / aspect, 0, 0, 0, 0, t, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0];
+    }
+    function m4tr(x, y, z) {
+      return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1];
+    }
+    function m4sc(s) {
+      return [s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1];
+    }
+    function arcball(cx, cy, width, height) {
+      const x = (cx / width) * 2 - 1;
+      const y = -((cy / height) * 2 - 1);
+      const r2 = x * x + y * y;
+      if (r2 <= 1) return [x, y, Math.sqrt(1 - r2)];
+      const r = Math.sqrt(r2);
+      return [x / r, y / r, 0];
+    }
+    function fmt(v) { return Number(v).toFixed(4); }
+
+    let rot = qNorm(INITIAL_QUAT);
+    let zoom = INITIAL_ZOOM;
+    let pan = [INITIAL_PAN[0], INITIAL_PAN[1]];
+
+    function currentViewDir() {
+      return qRotVec(qConj(rot), [0, 0, -1]);
+    }
+    function updateReadout() {
+      document.getElementById("zoom").textContent = fmt(zoom);
+      document.getElementById("view").textContent = "[" + currentViewDir().map(fmt).join(", ") + "]";
+      document.getElementById("quat").textContent = "[" + rot.map(fmt).join(", ") + "]";
+      document.getElementById("pan").textContent = "[" + pan.map(fmt).join(", ") + "]";
+    }
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.clientWidth * dpr | 0;
+      const height = canvas.clientHeight * dpr | 0;
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+
+    uploadFrame(NUM_FRAMES - 1);
+    updateReadout();
+
+    function render() {
+      requestAnimationFrame(render);
+
+      resize();
+      const width = canvas.width;
+      const height = canvas.height;
+      gl.viewport(0, 0, width, height);
+      gl.clearColor(1, 1, 1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+      const camDist = sceneRadius * 3.0 / zoom;
+      const near = camDist * 0.01;
+      const far = camDist * 10;
+      const proj = m4persp(Math.PI / 4, width / height, near, far);
+      const view = m4tr(pan[0], pan[1], -camDist);
+      const mvp = m4mul(proj, m4mul(view, m4mul(qMat4(rot), m4sc(1 / sceneRadius))));
+
+      gl.useProgram(program);
+      gl.uniformMatrix4fv(loc.mvp, false, new Float32Array(mvp));
+      const zoomPointScale = 1 + 0.25 * Math.max(0, zoom / INITIAL_ZOOM - 1);
+      gl.uniform1f(loc.pointSize, Math.min(7.0, BASE_POINT_SIZE * zoomPointScale));
+      gl.uniform3f(loc.color, 0.34, 0.34, 0.34);
+      gl.uniform1f(loc.alpha, Math.min(1.0, Math.max(0.2, 6000 / N)));
+      gl.bindVertexArray(vao);
+      gl.drawArrays(gl.POINTS, 0, N);
+      gl.bindVertexArray(null);
+    }
+    requestAnimationFrame(render);
+
+    const cwrap = document.getElementById("canvaswrap");
+    let drag = null;
+    cwrap.addEventListener("mousedown", event => {
+      drag = { x: event.clientX, y: event.clientY, shift: event.shiftKey, panStart: [...pan] };
+      cwrap.style.cursor = "grabbing";
+      event.preventDefault();
+    });
+    window.addEventListener("mousemove", event => {
+      if (!drag) return;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (drag.shift) {
+        pan[0] = drag.panStart[0] + (event.clientX - drag.x) / width * sceneRadius * 3 / zoom;
+        pan[1] = drag.panStart[1] - (event.clientY - drag.y) / height * sceneRadius * 3 / zoom;
+      } else {
+        const p1 = arcball(drag.x, drag.y, width, height);
+        const p2 = arcball(event.clientX, event.clientY, width, height);
+        const axis = [
+          p1[1] * p2[2] - p1[2] * p2[1],
+          p1[2] * p2[0] - p1[0] * p2[2],
+          p1[0] * p2[1] - p1[1] * p2[0],
+        ];
+        const sinA = Math.hypot(axis[0], axis[1], axis[2]);
+        const cosA = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
+        const angle = Math.atan2(sinA, cosA) * 2.2;
+        if (sinA > 1e-6) {
+          rot = qMul(qAA(axis[0] / sinA, axis[1] / sinA, axis[2] / sinA, angle), rot);
+        }
+        drag.x = event.clientX;
+        drag.y = event.clientY;
+      }
+      updateReadout();
+    });
+    window.addEventListener("mouseup", () => {
+      drag = null;
+      cwrap.style.cursor = "grab";
+    });
+    cwrap.addEventListener("wheel", event => {
+      zoom *= event.deltaY < 0 ? 1.015 : 0.985;
+      zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+      updateReadout();
+      event.preventDefault();
+    }, { passive: false });
+
+    document.getElementById("slider").addEventListener("input", function() {
+      const frame = parseInt(this.value, 10);
+      uploadFrame(frame);
+    });
+  })().catch(error => {
+    console.error(error);
+    document.getElementById("status").textContent = error.message;
+  });
+  </script>
+</body>
+</html>

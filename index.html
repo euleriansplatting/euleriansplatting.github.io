@@ -39,35 +39,12 @@
 
 <div class="container">
   
-  <div class="teaser-container">
-    <button id="prev-folder">&larr;</button>
-    <div class="teaser-grid">
-      <div class="grid-cell left-cell">
-        <img src="assets/images/garden/00003.png" alt="Teaser Image" id="main-image">
-        <div class="red-box" id="red-box"></div>
-      </div>
-      <div class="grid-cell right-cell">
-        <div class="zoom-grid">
-          <div class="zoom-cell">
-            <div class="zoom-display" id="zoom-ours" data-image="00003-ours.png"></div>
-            <label>Ours (EGS)</label>
-          </div>
-          <div class="zoom-cell">
-            <div class="zoom-display" id="zoom-gt" data-image="00003.png"></div>
-            <label>Ground Truth</label>
-          </div>
-          <div class="zoom-cell">
-            <div class="zoom-display" id="zoom-mcmc" data-image="00003-mcmc.png"></div>
-            <label>MCMC-Random</label>
-          </div>
-          <!-- <div class="zoom-cell">
-            <div class="zoom-display" id="zoom-ours-pre" data-image="00003-ours-pre.png"></div>
-            <label>Ours (EGS) - Sampled</label>
-          </div> -->
-        </div>
-      </div>
-    </div>
-    <button id="next-folder">&rarr;</button>
+  <div class="demo-frame-wrap">
+    <iframe
+      src="demo/hpp_demo.html"
+      title="Hashed Probability Pyramid demo"
+      class="demo-frame">
+    </iframe>
   </div>
   <p class="teaser-caption"><em><span class="teaser-caption-title">Eulerian Gaussian Splatting</span> uses gradient descent to optimize a gridded 3D probability distribution, then samples it to generate Gaussian splats.</em></p>
 
@@ -112,7 +89,41 @@
     This control variate estimator isolates the contribution of each Gaussian splat \(i\) based on the difference \((I-I_{-i})\) between the image rendered with all Gaussians and the image rendered with all but the \(i\)-th one. Surprisingly, these differences arise within the autodiff of attribute parameters \(\phi\), so they are computed without additional rendering passes.
   </p>
 
-  <h2 class="section-title">Video Results</h2>
+  <h2 class="section-title">Results</h2>
+
+  <h3 style="margin-top: 40px; margin-bottom: 15px; font-size: 1.3rem;">Comparisons</h3>
+  <div class="teaser-container">
+    <button id="prev-folder">&larr;</button>
+    <div class="teaser-grid">
+      <div class="grid-cell left-cell">
+        <img src="assets/images/garden/00003.png" alt="Teaser Image" id="main-image">
+        <div class="red-box" id="red-box"></div>
+      </div>
+      <div class="grid-cell right-cell">
+        <div class="zoom-grid">
+          <div class="zoom-cell">
+            <div class="zoom-display" id="zoom-ours" data-image="00003-ours.png"></div>
+            <label>Ours (EGS)</label>
+          </div>
+          <div class="zoom-cell">
+            <div class="zoom-display" id="zoom-gt" data-image="00003.png"></div>
+            <label>Ground Truth</label>
+          </div>
+          <div class="zoom-cell">
+            <div class="zoom-display" id="zoom-mcmc" data-image="00003-mcmc.png"></div>
+            <label>MCMC-Random</label>
+          </div>
+          <!-- <div class="zoom-cell">
+            <div class="zoom-display" id="zoom-ours-pre" data-image="00003-ours-pre.png"></div>
+            <label>Ours (EGS) - Sampled</label>
+          </div> -->
+        </div>
+      </div>
+    </div>
+    <button id="next-folder">&rarr;</button>
+  </div>
+
+  <h3 style="margin-top: 40px; margin-bottom: 15px; font-size: 1.3rem;">Videos</h3>
   <div class="video-grid">
     <div class="video-card">
       <video controls loop preload="metadata">

@@ -33,6 +33,7 @@
       position: relative;
       cursor: grab;
       min-height: 0;
+      touch-action: none;
     }
     canvas {
       display: block;
@@ -428,42 +429,109 @@
     requestAnimationFrame(render);
 
     const cwrap = document.getElementById("canvaswrap");
+    const pointers = new Map();
     let drag = null;
-    cwrap.addEventListener("mousedown", event => {
-      drag = { x: event.clientX, y: event.clientY, shift: event.shiftKey, panStart: [...pan] };
-      cwrap.style.cursor = "grabbing";
-      event.preventDefault();
-    });
-    window.addEventListener("mousemove", event => {
-      if (!drag) return;
+    let pinch = null;
+
+    function rotateFromDrag(fromX, fromY, toX, toY) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
-      if (drag.shift) {
-        pan[0] = drag.panStart[0] + (event.clientX - drag.x) / width * sceneRadius * 3 / zoom;
-        pan[1] = drag.panStart[1] - (event.clientY - drag.y) / height * sceneRadius * 3 / zoom;
-      } else {
-        const p1 = arcball(drag.x, drag.y, width, height);
-        const p2 = arcball(event.clientX, event.clientY, width, height);
-        const axis = [
-          p1[1] * p2[2] - p1[2] * p2[1],
-          p1[2] * p2[0] - p1[0] * p2[2],
-          p1[0] * p2[1] - p1[1] * p2[0],
-        ];
-        const sinA = Math.hypot(axis[0], axis[1], axis[2]);
-        const cosA = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
-        const angle = Math.atan2(sinA, cosA) * 2.2;
-        if (sinA > 1e-6) {
-          rot = qMul(qAA(axis[0] / sinA, axis[1] / sinA, axis[2] / sinA, angle), rot);
+      const p1 = arcball(fromX, fromY, width, height);
+      const p2 = arcball(toX, toY, width, height);
+      const axis = [
+        p1[1] * p2[2] - p1[2] * p2[1],
+        p1[2] * p2[0] - p1[0] * p2[2],
+        p1[0] * p2[1] - p1[1] * p2[0],
+      ];
+      const sinA = Math.hypot(axis[0], axis[1], axis[2]);
+      const cosA = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
+      const angle = Math.atan2(sinA, cosA) * 2.2;
+      if (sinA > 1e-6) {
+        rot = qMul(qAA(axis[0] / sinA, axis[1] / sinA, axis[2] / sinA, angle), rot);
+      }
+    }
+
+    function panFromDrag(fromX, fromY, toX, toY, panStart) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      pan[0] = panStart[0] + (toX - fromX) / width * sceneRadius * 3 / zoom;
+      pan[1] = panStart[1] - (toY - fromY) / height * sceneRadius * 3 / zoom;
+    }
+
+    function getPointerPair() {
+      return Array.from(pointers.values()).slice(0, 2);
+    }
+
+    function pointerDistance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function pointerCenter(a, b) {
+      return [(a.x + b.x) * 0.5, (a.y + b.y) * 0.5];
+    }
+
+    cwrap.addEventListener("pointerdown", event => {
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, type: event.pointerType });
+      cwrap.setPointerCapture(event.pointerId);
+      cwrap.style.cursor = "grabbing";
+
+      if (pointers.size === 1) {
+        drag = { x: event.clientX, y: event.clientY, shift: event.shiftKey, panStart: [...pan] };
+        pinch = null;
+      } else if (pointers.size === 2) {
+        const [a, b] = getPointerPair();
+        pinch = {
+          distance: pointerDistance(a, b),
+          center: pointerCenter(a, b),
+          zoomStart: zoom,
+          panStart: [...pan],
+        };
+        drag = null;
+      }
+      event.preventDefault();
+    });
+
+    cwrap.addEventListener("pointermove", event => {
+      if (!pointers.has(event.pointerId)) return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, type: event.pointerType });
+
+      if (pointers.size >= 2 && pinch) {
+        const [a, b] = getPointerPair();
+        const center = pointerCenter(a, b);
+        const distance = pointerDistance(a, b);
+        if (pinch.distance > 0) {
+          zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinch.zoomStart * distance / pinch.distance));
         }
-        drag.x = event.clientX;
-        drag.y = event.clientY;
+        panFromDrag(pinch.center[0], pinch.center[1], center[0], center[1], pinch.panStart);
+      } else if (drag) {
+        if (drag.shift) {
+          panFromDrag(drag.x, drag.y, event.clientX, event.clientY, drag.panStart);
+        } else {
+          rotateFromDrag(drag.x, drag.y, event.clientX, event.clientY);
+          drag.x = event.clientX;
+          drag.y = event.clientY;
+        }
       }
       updateReadout();
+      event.preventDefault();
     });
-    window.addEventListener("mouseup", () => {
-      drag = null;
-      cwrap.style.cursor = "grab";
-    });
+
+    function endPointer(event) {
+      pointers.delete(event.pointerId);
+      if (pointers.size === 0) {
+        drag = null;
+        pinch = null;
+        cwrap.style.cursor = "grab";
+      } else if (pointers.size === 1) {
+        const [remaining] = Array.from(pointers.values());
+        drag = { x: remaining.x, y: remaining.y, shift: false, panStart: [...pan] };
+        pinch = null;
+      }
+      event.preventDefault();
+    }
+
+    cwrap.addEventListener("pointerup", endPointer);
+    cwrap.addEventListener("pointercancel", endPointer);
     cwrap.addEventListener("wheel", event => {
       zoom *= event.deltaY < 0 ? 1.015 : 0.985;
       zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));

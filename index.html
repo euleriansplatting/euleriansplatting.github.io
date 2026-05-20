@@ -32,6 +32,7 @@
       <a href="#" class="link-btn">Paper (PDF)</a>
       <a href="#" class="link-btn">ArXiv</a>
       <a href="#" class="link-btn">Code (GitHub)</a>
+      <a href="#video" class="link-btn">Video</a>
       <a href="#bibtex" class="link-btn">BibTeX</a>
     </div>
   </div>
@@ -52,6 +53,17 @@
   <p style="font-size: 0.95rem; color: #555; margin: 20px 0;">
   We introduce a probabilistic splat-based radiance field framework that retains the fast rasterization and test-time efficiency of 3D Gaussian Splatting (3DGS) while replacing heuristic primitive manipulation with gradient-based optimization of a volumetric probability density. Rather than relocating, splitting, or culling Gaussians via hand-tuned densification (e.g., ADC), we treat primitive locations as samples drawn from a persistent, learnable density. We instantiate this density using a novel, memory-efficient multi-scale hierarchical grid that enables end-to-end gradient-based optimization. To stabilize the optimization, we derive an unbiased gradient estimator with control variates that markedly reduces variance. By allowing probability mass to flow to where the loss demands, our framework eliminates brittle priors and naturally explores the volume, achieving state-of-the-art reconstruction quality on mip-NeRF 360 while preserving 3DGS-level rendering speed.
   </p>
+
+  <h2 class="section-title" id="video">Video</h2>
+  <div class="youtube-wrapper">
+    <iframe
+      src="https://www.youtube.com/embed/cO8a_7Akhyc"
+      title="Eulerian Gaussian Splatting video"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allowfullscreen>
+    </iframe>
+  </div>
 
   <h2 class="section-title">Methodology</h2>
   <div class="figure-scroll">

@@ -16,7 +16,7 @@
     #wrap {
       height: 100%;
       display: grid;
-      grid-template-rows: auto 520px auto auto;
+      grid-template-rows: auto 520px auto auto auto;
       user-select: none;
     }
     header {
@@ -89,13 +89,21 @@
       left: 0;
       right: 0;
       bottom: -10px;
-      display: flex;
-      justify-content: space-between;
       pointer-events: none;
       font-size: 12px;
       color: #111;
       letter-spacing: 0;
       white-space: nowrap;
+    }
+    #tickLabels span {
+      position: absolute;
+      transform: translateX(-50%);
+    }
+    #tickLabels span:first-child {
+      transform: translateX(0);
+    }
+    #tickLabels span:last-child {
+      transform: translateX(-100%);
     }
     #tickLabels sup {
       font-size: 0.75em;
@@ -157,6 +165,13 @@
       text-transform: none;
       letter-spacing: 0;
     }
+    #demoCaption {
+      padding: 0 20px 18px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: #555;
+      text-align: left;
+    }
   </style>
 </head>
 <body>
@@ -172,14 +187,18 @@
     </div>
 
     <div id="controls">
-      <div id="frameLabel">Hashed Probability Pyramid Resolution</div>
+      <div id="frameLabel">Probability Grid Resolution</div>
       <div id="sliderWrap">
         <div id="ticks"></div>
         <div id="tickLabels"></div>
-        <input type="range" id="slider" min="0" max="11" step="1" value="11">
+        <input type="range" id="slider" min="0" max="11" step="1" value="6">
       </div>
       <div id="status">loading</div>
     </div>
+
+    <p id="demoCaption">
+      We sample Gaussian centers from our 3D probability hierarchy by drawing from the coarsest level (2<sup>3</sup>) first, then iteratively descending through finer levels until reaching an effective 4096<sup>3</sup> grid resolution. The point cloud starts coarse and unstructured at the top level, then progressively tightens as each finer level narrows in on specific structures in space.
+    </p>
 
     <div id="readout">
       <span>zoom <code id="zoom">-</code></span>
@@ -200,7 +219,9 @@
     const MIN_ZOOM = 10.0;
     const MAX_ZOOM = 240.0;
     const BASE_POINT_SIZE = Math.max(1.8, Math.min(4.5, 470 / Math.sqrt(N)));
-    const POINT_SIZE_SCALE = 1.85;
+    const DESKTOP_POINT_SIZE_SCALE = 1.45;
+    const TOUCH_POINT_SIZE_SCALE = 1.85;
+    const IS_TOUCH_VIEWER = matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
     const INITIAL_QUAT = [-0.7486, 0.0446, -0.0598, -0.6589];
     const INITIAL_PAN = [-0.0007, 0.0462];
 
@@ -210,6 +231,7 @@
     for (let i = 0; i < NUM_FRAMES; i++) {
       tickWrap.appendChild(document.createElement("div"));
       const label = document.createElement("span");
+      label.style.left = `${i / (NUM_FRAMES - 1) * 100}%`;
       label.innerHTML = `${2 ** (i + 1)}<sup>3</sup>`;
       tickLabelWrap.appendChild(label);
     }
@@ -394,7 +416,7 @@
       }
     }
 
-    uploadFrame(NUM_FRAMES - 1);
+    uploadFrame(6);
     updateReadout();
 
     function render() {
@@ -420,7 +442,8 @@
       gl.useProgram(program);
       gl.uniformMatrix4fv(loc.mvp, false, new Float32Array(mvp));
       const zoomPointScale = 1 + 0.25 * Math.max(0, zoom / INITIAL_ZOOM - 1);
-      gl.uniform1f(loc.pointSize, Math.min(8.5, BASE_POINT_SIZE * zoomPointScale * POINT_SIZE_SCALE));
+      const pointSizeScale = IS_TOUCH_VIEWER ? TOUCH_POINT_SIZE_SCALE : DESKTOP_POINT_SIZE_SCALE;
+      gl.uniform1f(loc.pointSize, Math.min(8.5, BASE_POINT_SIZE * zoomPointScale * pointSizeScale));
       gl.uniform3f(loc.color, 0.34, 0.34, 0.34);
       gl.uniform1f(loc.alpha, Math.min(1.0, Math.max(0.2, 6000 / N)));
       gl.bindVertexArray(vao);

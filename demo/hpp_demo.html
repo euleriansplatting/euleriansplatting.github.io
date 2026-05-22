@@ -191,7 +191,7 @@
       <div id="sliderWrap">
         <div id="ticks"></div>
         <div id="tickLabels"></div>
-        <input type="range" id="slider" min="0" max="11" step="1" value="6">
+        <input type="range" id="slider" min="0" max="11" step="1" value="0">
       </div>
       <div id="status">loading</div>
     </div>
@@ -218,6 +218,10 @@
     const INITIAL_ZOOM = 85.0;
     const MIN_ZOOM = 10.0;
     const MAX_ZOOM = 240.0;
+    const FRAME_INTERVAL_MS = 1000;
+    const IDLE_DELAY_MS = 1200;
+    const IDLE_ROTATION_SPEED = 0.22;
+    const IDLE_ROTATION_AXIS = [0, 0, 1];
     const BASE_POINT_SIZE = Math.max(1.8, Math.min(4.5, 470 / Math.sqrt(N)));
     const DESKTOP_POINT_SIZE_SCALE = 1.45;
     const TOUCH_POINT_SIZE_SCALE = 1.85;
@@ -226,6 +230,7 @@
     const INITIAL_PAN = [-0.0007, 0.0462];
 
     const status = document.getElementById("status");
+    const slider = document.getElementById("slider");
     const tickWrap = document.getElementById("ticks");
     const tickLabelWrap = document.getElementById("tickLabels");
     for (let i = 0; i < NUM_FRAMES; i++) {
@@ -395,6 +400,11 @@
     let rot = qNorm(INITIAL_QUAT);
     let zoom = INITIAL_ZOOM;
     let pan = [INITIAL_PAN[0], INITIAL_PAN[1]];
+    let lastInteractionTime = performance.now();
+    let idleBaseRot = [...rot];
+    let idleYaw = 0;
+    let isHoveringDemo = false;
+    let isDraggingView = false;
 
     function currentViewDir() {
       return qRotVec(qConj(rot), [0, 0, -1]);
@@ -416,11 +426,44 @@
       }
     }
 
-    uploadFrame(6);
+    let currentFrame = 0;
+
+    function setFrame(frame) {
+      currentFrame = ((frame % NUM_FRAMES) + NUM_FRAMES) % NUM_FRAMES;
+      slider.value = currentFrame;
+      uploadFrame(currentFrame);
+    }
+
+    setFrame(0);
     updateReadout();
+
+    function markInteraction() {
+      lastInteractionTime = performance.now();
+    }
+
+    function isIdle(now = performance.now()) {
+      return now - lastInteractionTime >= IDLE_DELAY_MS;
+    }
+
+    let lastRenderTime = performance.now();
+    let lastFrameAdvanceTime = performance.now();
 
     function render() {
       requestAnimationFrame(render);
+
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - lastRenderTime) / 1000);
+      lastRenderTime = now;
+      if (!isDraggingView) {
+        idleYaw += IDLE_ROTATION_SPEED * dt;
+        rot = qNorm(qMul(idleBaseRot, qAA(...IDLE_ROTATION_AXIS, idleYaw)));
+      }
+      if (isIdle(now) && !isHoveringDemo && now - lastFrameAdvanceTime >= FRAME_INTERVAL_MS) {
+        setFrame(currentFrame + 1);
+        lastFrameAdvanceTime = now;
+      } else if (isHoveringDemo) {
+        lastFrameAdvanceTime = now;
+      }
 
       resize();
       const width = canvas.width;
@@ -452,10 +495,19 @@
     }
     requestAnimationFrame(render);
 
+    const wrap = document.getElementById("wrap");
     const cwrap = document.getElementById("canvaswrap");
     const pointers = new Map();
     let drag = null;
     let pinch = null;
+
+    wrap.addEventListener("pointerenter", () => {
+      isHoveringDemo = true;
+    });
+
+    wrap.addEventListener("pointerleave", () => {
+      isHoveringDemo = false;
+    });
 
     function rotateFromDrag(fromX, fromY, toX, toY) {
       const width = canvas.clientWidth;
@@ -495,9 +547,11 @@
     }
 
     cwrap.addEventListener("pointerdown", event => {
+      markInteraction();
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, type: event.pointerType });
       cwrap.setPointerCapture(event.pointerId);
       cwrap.style.cursor = "grabbing";
+      isDraggingView = true;
 
       if (pointers.size === 1) {
         drag = { x: event.clientX, y: event.clientY, shift: event.shiftKey, panStart: [...pan] };
@@ -517,6 +571,7 @@
 
     cwrap.addEventListener("pointermove", event => {
       if (!pointers.has(event.pointerId)) return;
+      markInteraction();
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, type: event.pointerType });
 
       if (pointers.size >= 2 && pinch) {
@@ -541,11 +596,15 @@
     });
 
     function endPointer(event) {
+      markInteraction();
       pointers.delete(event.pointerId);
       if (pointers.size === 0) {
         drag = null;
         pinch = null;
         cwrap.style.cursor = "grab";
+        idleBaseRot = [...rot];
+        idleYaw = 0;
+        isDraggingView = false;
       } else if (pointers.size === 1) {
         const [remaining] = Array.from(pointers.values());
         drag = { x: remaining.x, y: remaining.y, shift: false, panStart: [...pan] };
@@ -557,16 +616,18 @@
     cwrap.addEventListener("pointerup", endPointer);
     cwrap.addEventListener("pointercancel", endPointer);
     cwrap.addEventListener("wheel", event => {
+      markInteraction();
       zoom *= event.deltaY < 0 ? 1.015 : 0.985;
       zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
       updateReadout();
       event.preventDefault();
     }, { passive: false });
 
-    document.getElementById("slider").addEventListener("input", function() {
-      const frame = parseInt(this.value, 10);
-      uploadFrame(frame);
+    slider.addEventListener("input", function() {
+      markInteraction();
+      setFrame(parseInt(this.value, 10));
     });
+
   })().catch(error => {
     console.error(error);
     document.getElementById("status").textContent = error.message;

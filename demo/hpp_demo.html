@@ -403,7 +403,7 @@
     let lastInteractionTime = performance.now();
     let idleBaseRot = [...rot];
     let idleYaw = 0;
-    let isHoveringDemo = false;
+    let isResolutionPaused = false;
     let isDraggingView = false;
 
     function currentViewDir() {
@@ -458,10 +458,10 @@
         idleYaw += IDLE_ROTATION_SPEED * dt;
         rot = qNorm(qMul(idleBaseRot, qAA(...IDLE_ROTATION_AXIS, idleYaw)));
       }
-      if (isIdle(now) && !isHoveringDemo && now - lastFrameAdvanceTime >= FRAME_INTERVAL_MS) {
+      if (isIdle(now) && !isResolutionPaused && now - lastFrameAdvanceTime >= FRAME_INTERVAL_MS) {
         setFrame(currentFrame + 1);
         lastFrameAdvanceTime = now;
-      } else if (isHoveringDemo) {
+      } else if (isResolutionPaused) {
         lastFrameAdvanceTime = now;
       }
 
@@ -501,12 +501,8 @@
     let drag = null;
     let pinch = null;
 
-    wrap.addEventListener("pointerenter", () => {
-      isHoveringDemo = true;
-    });
-
     wrap.addEventListener("pointerleave", () => {
-      isHoveringDemo = false;
+      isResolutionPaused = false;
     });
 
     function rotateFromDrag(fromX, fromY, toX, toY) {
@@ -625,6 +621,7 @@
 
     slider.addEventListener("input", function() {
       markInteraction();
+      isResolutionPaused = true;
       setFrame(parseInt(this.value, 10));
     });
 
